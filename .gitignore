@@ -140,6 +140,7 @@ dmypy.json
 
 ### VisualStudioCode ###
 .vscode/*
+XDG_CACHE_HOME/
 
 
 ### VisualStudioCode Patch ###
