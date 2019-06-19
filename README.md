@@ -32,6 +32,7 @@ Here all items on amenities(\*2many) will be replaced by those with ids `[1,2,3]
 
 
 To add or remove items on \*2many field use `add` and `remove` operator.
+
 ```PUT /api/property/2/```
 
 Request Body
