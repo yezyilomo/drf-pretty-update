@@ -12,7 +12,7 @@ class PrettyUpdate(object):
             message = self.constrain_error_prefix(field) + str(e)
             raise serializers.ValidationError(message)
 
-    def update_many_ralated_field(self, instance, field, value):
+    def update_many_to_many_ralated_field(self, instance, field, value):
         if isinstance(value, dict):
             obj = getattr(instance, field)
             for operator in value:
@@ -47,13 +47,46 @@ class PrettyUpdate(object):
             )
             raise serializers.ValidationError(message)
 
+    def update_one_to_many_ralated_field(self, instance, field, value):
+        if isinstance(value, dict):
+            obj = getattr(instance, field)
+            for operator in value:
+                if operator == "delete":
+                    try:
+                        obj.filter(pk__in=value[operator]).delete()
+                    except Exception as e:
+                        message = self.constrain_error_prefix(field) + str(e)
+                        raise serializers.ValidationError(message)
+                else:
+                    message = (
+                        f"{operator} is an invalid operator, "
+                        "allowed operators are 'add' and 'delete'"
+                    )
+                    raise serializers.ValidationError(message)
+        elif isinstance(value, list):
+            try:
+                getattr(instance, field).set(value)
+            except Exception as e:
+                message = self.constrain_error_prefix(field) + str(e)
+                raise serializers.ValidationError(message)
+        else:
+            message = (
+                f"{field} value must be of type list or dict "
+                f"and not {type(value).__name__}"
+            )
+            raise serializers.ValidationError(message)
+
     def pretty_update(self, instance, data):
         for field in data:
             field_type = self.get_fields()[field]
             if isinstance(field_type, serializers.Serializer):
                 self.update_related_field(instance, field, data[field])
             elif isinstance(field_type, serializers.ListSerializer):
-                self.update_many_ralated_field(instance, field, data[field])
+                relation = getattr(instance, field).__class__.__name__
+                if relation == "ManyRelatedManager":
+                    self.update_many_to_many_ralated_field(instance, field, data[field])
+                if relation == "RelatedManager":
+                    self.update_one_to_many_ralated_field(instance, field, data[field])
             else:
                 pass
 
