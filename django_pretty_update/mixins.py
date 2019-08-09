@@ -7,7 +7,7 @@ class PrettyUpdate(object):
 
     def update_related_field(self, instance, field, value):
         try:
-            setattr(instance, field+"_id", value)
+            setattr(instance, field, value)
         except Exception as e:
             message = self.constrain_error_prefix(field) + str(e)
             raise serializers.ValidationError(message)
@@ -76,19 +76,59 @@ class PrettyUpdate(object):
             )
             raise serializers.ValidationError(message)
 
-    def pretty_update(self, instance, data):
-        for field in data:
+    def filter_fields(self, data):
+        fields = {
+            "simple_related": {},
+            "many_related": {}
+        }
+        for field, value in data.items():
             field_type = self.get_fields()[field]
             if isinstance(field_type, serializers.Serializer):
-                self.update_related_field(instance, field, data[field])
+                fields["simple_related"].update({field+"_id": value})
             elif isinstance(field_type, serializers.ListSerializer):
-                relation = getattr(instance, field).__class__.__name__
-                if relation == "ManyRelatedManager":
-                    self.update_many_to_many_ralated_field(instance, field, data[field])
-                if relation == "RelatedManager":
-                    self.update_one_to_many_ralated_field(instance, field, data[field])
+                fields["many_related"].update({field: value})
             else:
                 pass
+        return fields
+
+    def create_obj(self, validated_data, simple_related_fields):
+        obj = self.Meta.model.objects.create(
+            **validated_data,
+            **simple_related_fields
+        )
+        return obj
+
+    def update_simple_related_fields(self, instance, simple_related_fields):
+        for field, value in simple_related_fields.items():
+            self.update_related_field(instance, field, value)
+
+    def update_many_related_fields(self, instance, many_related_fields):
+        for field, value in many_related_fields.items():
+            relation = getattr(instance, field).__class__.__name__
+            if relation == "ManyRelatedManager":
+                self.update_many_to_many_ralated_field(instance, field, value)
+            if relation == "RelatedManager":
+                self.update_one_to_many_ralated_field(instance, field, value)
+
+    def pretty_update(self, instance, data):
+        fields = self.filter_fields(data)
+        simple_related_fields = fields["simple_related"]
+        many_related_fields = fields["many_related"]
+        self.update_simple_related_fields(instance, simple_related_fields)
+        self.update_many_related_fields(instance, many_related_fields)
+
+    def create(self, validated_data):
+        """Pretty create """
+        request = self.context.get('request')
+        data = request.data
+        fields = self.filter_fields(data)
+        simple_related_fields = fields["simple_related"]
+        # Validate simple related fields
+        obj = self.create_obj(validated_data, simple_related_fields)
+        many_related_fields = fields["many_related"]
+        # Validate many related fields
+        self.update_many_related_fields(obj, many_related_fields)
+        return obj
 
     def update(self, instance, validated_data):
         """Pretty update """
