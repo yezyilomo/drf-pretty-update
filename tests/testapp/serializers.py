@@ -2,19 +2,19 @@ from rest_framework import serializers
 from tests.testapp.models import Book, Course, Student, Phone
 from drf_pretty_update.mixins import ReplaceableNestedField, NestedModelSerializer, WritableNestedField
 
-class PhoneSerializer(NestedModelSerializer, serializers.ModelSerializer):
+class PhoneSerializer(NestedModelSerializer):
     class Meta:
         model = Phone
         fields = ['number', 'type']
 
-        
-class BookSerializer(NestedModelSerializer, serializers.ModelSerializer):
+
+class BookSerializer(NestedModelSerializer):
     class Meta:
         model = Book
         fields = ['title', 'author']
 
 
-class WritableCourseSerializer(NestedModelSerializer, serializers.ModelSerializer):
+class WritableCourseSerializer(NestedModelSerializer):
     books = WritableNestedField(serializer=BookSerializer, many=True, required=False)
         
     class Meta:
@@ -22,7 +22,7 @@ class WritableCourseSerializer(NestedModelSerializer, serializers.ModelSerialize
         fields = ['name', 'code', 'books']
 
 
-class ReplaceableCourseSerializer(NestedModelSerializer, serializers.ModelSerializer):
+class ReplaceableCourseSerializer(NestedModelSerializer):
     books = ReplaceableNestedField(serializer=BookSerializer, many=True, required=False)
         
     class Meta:
@@ -30,7 +30,7 @@ class ReplaceableCourseSerializer(NestedModelSerializer, serializers.ModelSerial
         fields = ['name', 'code', 'books']
 
 
-class ReplaceableStudentSerializer(NestedModelSerializer, serializers.ModelSerializer):
+class ReplaceableStudentSerializer(NestedModelSerializer):
     course = ReplaceableNestedField(serializer=WritableCourseSerializer, many=False)
     phone_numbers = PhoneSerializer(many=True, read_only=True)
 
@@ -39,7 +39,7 @@ class ReplaceableStudentSerializer(NestedModelSerializer, serializers.ModelSeria
         fields = ['name', 'age', 'course', 'phone_numbers']
 
 
-class WritableStudentSerializer(NestedModelSerializer, serializers.ModelSerializer):
+class WritableStudentSerializer(NestedModelSerializer):
     course = WritableNestedField(serializer=WritableCourseSerializer, many=False)
     phone_numbers = PhoneSerializer(many=True, read_only=True)
 

@@ -7,12 +7,8 @@ class ReplaceableField(object):
 class WritableField(object):
     pass
 
-def ReplaceableNestedField(*args, serializer=None, many=False, **kwargs):
+def ReplaceableNestedField(*args, serializer=None, **kwargs):
     class List(serializers.ListSerializer, ReplaceableField):
-        def to_representation(self, value):
-            request = self.context.get('request')
-            return serializer(value, many=True, context={'request': request}).data
-
         def validate_nested(self, data):
             queryset = self.child.Meta.model.objects.all()
             validator = serializers.PrimaryKeyRelatedField(
@@ -24,7 +20,7 @@ def ReplaceableNestedField(*args, serializer=None, many=False, **kwargs):
 
         def to_internal_value(self, data):
             request = self.context.get('request')
-            if request.method in ["PUT", "PATCH"] and self.many:
+            if request.method in ["PUT", "PATCH"]:
                 operations = ["add", "remove"]
                 if isinstance(data, dict) and set(data.keys()).issubset(set(operations)):
                     pks = [pk for sub_pk in data.values() for pk in sub_pk]
@@ -41,15 +37,6 @@ def ReplaceableNestedField(*args, serializer=None, many=False, **kwargs):
     class ReplaceableNestedFieldSerializer(serializer, ReplaceableField):
         class Meta(serializer.Meta):
             list_serializer_class = List
-        
-        def __init__(self, *args, many=False, view=None, **kwargs):
-            self.view = view
-            self.many = many
-            super().__init__(*args, **kwargs)
-
-        def to_representation(self, value):
-            request = self.context.get('request')
-            return serializer(value, many=False, context={'request': request}).data
 
         def run_validation(self, data):
             (is_empty_value, data) = self.validate_empty_values(data)
@@ -71,16 +58,12 @@ def ReplaceableNestedField(*args, serializer=None, many=False, **kwargs):
             self.validate_nested(data)
             return data
 
-    return ReplaceableNestedFieldSerializer(*args, many=many, **kwargs)
+    return ReplaceableNestedFieldSerializer(*args, **kwargs)
 
 
-def WritableNestedField(*args, serializer=None, many=False, **kwargs):
+def WritableNestedField(*args, serializer=None, **kwargs):
 
     class List(serializers.ListSerializer, WritableField):
-        def to_representation(self, value):
-            request = self.context.get('request')
-            return serializer(value, many=True, context={'request': request}).data
-    
         def validate_pk_list(self, pks):
             queryset = self.child.Meta.model.objects.all()
             validator = serializers.PrimaryKeyRelatedField(queryset=queryset, many=True)
@@ -107,7 +90,7 @@ def WritableNestedField(*args, serializer=None, many=False, **kwargs):
 
         def to_internal_value(self, data):
             request = self.context.get('request')
-            if request.method in ["PUT", "PATCH"] and self.many:
+            if request.method in ["PUT", "PATCH"]:
                 operations = {
                     "add": self.validate_add_list, 
                     "remove": self.validate_remove_list, 
@@ -133,18 +116,13 @@ def WritableNestedField(*args, serializer=None, many=False, **kwargs):
 
         class Meta(serializer.Meta):
             list_serializer_class = List
-        
-        def __init__(self, *args, many=False, view=None, **kwargs):
-            self.view = view
-            self.many = many
-            super().__init__(*args, **kwargs)
 
         def to_internal_value(self, data):
             parent_serializer = serializer(data=data)
             parent_serializer.is_valid(raise_exception=True)
             return parent_serializer.validated_data
 
-    return WritableNestedFieldSerializer(*args, many=many, **kwargs)
+    return WritableNestedFieldSerializer(*args, **kwargs)
 
 
 class NestedModelSerializer(serializers.ModelSerializer):
