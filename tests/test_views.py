@@ -124,7 +124,7 @@ class ViewTests(APITestCase):
         )
 
 
-    # **************** POST Tests ********************* #
+    # **************** PUT Tests ********************* #
 
     def test_put_on_replaceable_nested_simple_related_field(self):
         url = reverse("rstudent-detail", args=[self.student.id])
