@@ -5,7 +5,11 @@ Simple HTTP POST, PUT & PATCH request handler for Django REST Framework(DRF) nes
 ## Getting Started
 drf-pretty-update has two components, Serializer and Fields. The Serializer which is `NestedModelSerializer` has `update` and `create` logics for nested fields, Fields are used to validate data before dispatching update or create.
 
-There are two types of fields which are `ReplaceableNestedField` and `WritableNestedField`, `ReplaceableNestedField` is used if you want to update nested field by using ids of existing data(basically associate and dessociate existing nested resources with the parent resource without actually mutating the nested resource), on the other hand `WritableNestedField` is used if you want to be able to actually mutate(create and update) nested resources.
+There are two types of fields which are `ReplaceableNestedField` and `WritableNestedField`.
+
+`ReplaceableNestedField:` is used if you want to update nested field by using ids of existing data(basically associate and dessociate existing nested resources with the parent resource without actually mutating the nested resource).
+
+`WritableNestedField:` is used if you want to be able to actually mutate(create and update) nested resources.
 
 ### Using ReplaceableNestedField
 ```python
@@ -26,7 +30,7 @@ class AmenitySerializer(NestedModelSerializer):
 
 class PropertySerializer(NestedModelSerializer):
     location = ReplaceableNestedField(serializer=LocationSerializer)
-    amenities = ReplaceableNestedField(serializer=Amenities ,many=True)
+    amenities = ReplaceableNestedField(serializer=AmenitySerializer ,many=True)
     class Meta:
         model = Property
         fields = (
@@ -126,7 +130,7 @@ class AmenitySerializer(NestedModelSerializer):
 
 class PropertySerializer(NestedModelSerializer):
     location = WritableNestedField(serializer=LocationSerializer)
-    amenities = WritableNestedField(serializer=Amenities ,many=True)
+    amenities = WritableNestedField(serializer=AmenitySerializer ,many=True)
     class Meta:
         model = Property
         fields = (
