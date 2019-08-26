@@ -129,13 +129,6 @@ class NestedModelSerializer(serializers.ModelSerializer):
     def constrain_error_prefix(self, field):
         return f"Error on {field} field: "
 
-    def create_obj(self, validated_data, simple_related_fields):
-        obj = self.Meta.model.objects.create(
-            **validated_data,
-            **simple_related_fields
-        )
-        return obj
-
     def create_replaceable_simple_related(self, data):
         # data format {field: pk}
         objs = {}
@@ -149,16 +142,21 @@ class NestedModelSerializer(serializers.ModelSerializer):
         # data format {field: {sub_field: value}}
         objs = {}
         for field, value in data.items():
-            model = self.get_fields()[field].Meta.model
-            obj = model.objects.create(**value)
+            child = type(self.get_fields()[field])
+            serializer = child(data=value)
+            serializer.is_valid()
+            obj = serializer.save()
             objs.update({field: obj})
         return objs
 
     def bulk_create_objs(self, field, data):
         pks = []
         model = self.get_fields()[field].child.Meta.model
+        child = type(self.get_fields()[field].child)
         for values in data:
-            obj = model.objects.create(**values)
+            serializer = child(data=values)
+            serializer.is_valid()
+            obj = serializer.save()
             pks.append(obj.pk)
         return pks
 
@@ -219,7 +217,7 @@ class NestedModelSerializer(serializers.ModelSerializer):
             )
         }
 
-        obj = self.create_obj(validated_data, simple_related)
+        obj = super().create({**validated_data, **simple_related})
         
         self.create_replaceable_many_related(
             obj, 
@@ -233,17 +231,12 @@ class NestedModelSerializer(serializers.ModelSerializer):
 
         return obj
 
-    def update_obj(self, instance, validated_data):
-        for field in validated_data:
-            setattr(instance, field, validated_data[field])
-        instance.save()
-        return instance
-
     def update_replaceable_simple_related(self, instance, data):
         # data format {field: pk}
         objs = {}
         for field, pk in data.items():
-            setattr(instance, field+"_id", pk)
+            child_obj = self.get_fields()[field].Meta.model.objects.get(pk=pk)
+            setattr(instance, field, child_obj)
             instance.save()
             objs.update({field: instance})
         return objs
@@ -251,10 +244,12 @@ class NestedModelSerializer(serializers.ModelSerializer):
     def update_writable_simple_related(self, instance, data):
         # data format {field: {sub_field: value}}
         objs = {}
-        for field, value in data.items():
+        for field, values in data.items():
             sub_obj = getattr(instance, field)
-            for sub_field, sub_value in value.items():
-                setattr(sub_obj, sub_field, sub_value)
+            child = type(self.get_fields()[field])
+            serializer = child(sub_obj, data=values)
+            serializer.is_valid()
+            serializer.save()
             objs.update({field: sub_obj})
         return objs
 
@@ -286,9 +281,11 @@ class NestedModelSerializer(serializers.ModelSerializer):
     def bulk_create_many_related(self, field, instance, data):
         pks = []
         sub_obj = getattr(instance, field)
-        model = self.get_fields()[field].child.Meta.model
+        child = type(self.get_fields()[field].child)
         for values in data:
-            obj = model.objects.create(**values)
+            serializer = child(data=values)
+            serializer.is_valid()
+            obj = serializer.save()
             pks.append(obj.pk)
         sub_obj.add(*pks)
         return pks
@@ -297,9 +294,12 @@ class NestedModelSerializer(serializers.ModelSerializer):
         # {pk: {sub_field: values}}
         objs = []
         model = self.get_fields()[field].child.Meta.model
+        child = type(self.get_fields()[field].child)
         for pk, values in data.items():
             obj = model.objects.get(pk=pk)
-            self.update_obj(obj, values)
+            serializer = child(obj, data=values)
+            serializer.is_valid()
+            obj = serializer.save()
             objs.append(obj)
         return objs
 
@@ -370,4 +370,4 @@ class NestedModelSerializer(serializers.ModelSerializer):
             fields["writable_nested_fields"]["many_related"]
         )
 
-        return self.update_obj(instance, validated_data)
+        return super().update(instance, validated_data)
