@@ -2,6 +2,12 @@
 This is a collection of simple and flexible model serializer and fields for Django REST Framework which allows you to create/update your models with related nested data.
 
 
+## Installing
+Since the package is not officially released, for now we'll use the command below to download it from the pypi test repository
+
+`pip install --index-url https://test.pypi.org/simple/ drf-pretty-update`
+
+
 ## Getting Started
 drf-pretty-update has two components, Serializer and Fields. The Serializer which is `NestedModelSerializer` has `update` and `create` logics for nested fields, Fields are used to validate data before dispatching update or create.
 
