@@ -66,11 +66,19 @@ def WritableNestedField(*args, serializer=None, **kwargs):
     class List(serializers.ListSerializer, WritableField):
         def validate_pk_list(self, pks):
             queryset = self.child.Meta.model.objects.all()
-            validator = serializers.PrimaryKeyRelatedField(queryset=queryset, many=True)
+            validator = serializers.PrimaryKeyRelatedField(
+                queryset=queryset, 
+                many=True
+            )
             return validator.run_validation(pks)
     
         def validate_data_list(self, data):
-            parent_serializer = serializer(data=data, many=True)
+            request = self.context.get('request')
+            parent_serializer = serializer(
+                data=data, 
+                many=True, 
+                context={"request": request}
+            )
             parent_serializer.is_valid(raise_exception=True)
             return parent_serializer.validated_data
     
@@ -86,28 +94,39 @@ def WritableNestedField(*args, serializer=None, **kwargs):
                 self.validate_pk_list(data.keys())
                 self.validate_data_list(list(data.values()))
             else:
-                raise serializers.ValidationError("Expected dict of form {'pk': 'data'..}")
+                raise serializers.ValidationError(
+                    "Expected dict of form {'pk': 'data'..}"
+                )
 
         def to_internal_value(self, data):
             request = self.context.get('request')
-            if request.method in ["PUT", "PATCH"]:
+            context={"request": request}
+            if  request.method in ["PUT", "PATCH"]:
                 operations = {
                     "add": self.validate_add_list, 
                     "remove": self.validate_remove_list, 
                     "update": self.validate_update_list
                 }
                 data_is_dict = isinstance(data, dict)
-                data_is_valid = set(data.keys()).issubset(set(operations.keys()))
+                input_ops = set(data.keys())
+                supported_ops = set(operations.keys())
+                data_is_valid = input_ops.issubset(supported_ops)
                 if data_is_dict and data_is_valid:
                     for operation in data:
                         operations[operation](data[operation])
                     return data
                 else:
-                    raise serializers.ValidationError(
-                        "Expected dict of form {'add': [..], 'remove': [..], 'update': [..] }"
+                    msg = (
+                        "Expected dict of form {'add': [..],"
+                        "'remove': [..], 'update': [..] }"
                     )
+                    raise serializers.ValidationError(msg)
 
-            parent_serializer = serializer(data=data, many=True)
+            parent_serializer = serializer(
+                data=data, 
+                many=True, 
+                context=context
+            )
             parent_serializer.is_valid(raise_exception=True)
             return parent_serializer.validated_data
 
@@ -118,7 +137,9 @@ def WritableNestedField(*args, serializer=None, **kwargs):
             list_serializer_class = List
 
         def to_internal_value(self, data):
-            parent_serializer = serializer(data=data)
+            request = self.context.get("request")
+            context={"request": request}
+            parent_serializer = serializer(data=data, context=context)
             parent_serializer.is_valid(raise_exception=True)
             return parent_serializer.validated_data
 
@@ -140,10 +161,12 @@ class NestedModelSerializer(serializers.ModelSerializer):
 
     def create_writable_simple_related(self, data):
         # data format {field: {sub_field: value}}
+        request = self.context.get("request")
+        context={"request": request}
         objs = {}
         for field, value in data.items():
             child = type(self.get_fields()[field])
-            serializer = child(data=value)
+            serializer = child(data=value, context=context)
             serializer.is_valid()
             obj = serializer.save()
             objs.update({field: obj})
@@ -151,10 +174,12 @@ class NestedModelSerializer(serializers.ModelSerializer):
 
     def bulk_create_objs(self, field, data):
         pks = []
+        request = self.context.get("request")
+        context={"request": request}
         model = self.get_fields()[field].child.Meta.model
         child = type(self.get_fields()[field].child)
         for values in data:
-            serializer = child(data=values)
+            serializer = child(data=values, context=context)
             serializer.is_valid()
             obj = serializer.save()
             pks.append(obj.pk)
@@ -183,8 +208,14 @@ class NestedModelSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         fields = {
-            "replaceable_nested_fields": {"simple_related": {}, "many_related": {}},
-            "writable_nested_fields": {"simple_related": {}, "many_related": {}}
+            "replaceable_nested_fields": {
+                "simple_related": {}, 
+                "many_related": {}
+            },
+            "writable_nested_fields": {
+                "simple_related": {}, 
+                "many_related": {}
+            }
         }
         data = {**validated_data}
         for field in data:
@@ -192,17 +223,21 @@ class NestedModelSerializer(serializers.ModelSerializer):
             if isinstance(field_type, ReplaceableField):
                 value = validated_data.pop(field)
                 if isinstance(field_type, serializers.Serializer):
-                    fields["replaceable_nested_fields"]["simple_related"].update({field: value})
+                    fields["replaceable_nested_fields"]\
+                        ["simple_related"].update({field: value})
                 elif isinstance(field_type, serializers.ListSerializer):
-                    fields["replaceable_nested_fields"]["many_related"].update({field: value})
+                    fields["replaceable_nested_fields"]\
+                        ["many_related"].update({field: value})
                 else:
                     pass
             elif isinstance(field_type, WritableField):
                 value = validated_data.pop(field)
                 if isinstance(field_type, serializers.Serializer):
-                    fields["writable_nested_fields"]["simple_related"].update({field: value})
+                    fields["writable_nested_fields"]\
+                        ["simple_related"].update({field: value})
                 elif isinstance(field_type, serializers.ListSerializer):
-                    fields["writable_nested_fields"]["many_related"].update({field: value})
+                    fields["writable_nested_fields"]\
+                        ["many_related"].update({field: value})
                 else:
                     pass
             else:
@@ -243,11 +278,13 @@ class NestedModelSerializer(serializers.ModelSerializer):
 
     def update_writable_simple_related(self, instance, data):
         # data format {field: {sub_field: value}}
+        request = self.context.get("request")
+        context={"request": request}
         objs = {}
         for field, values in data.items():
             sub_obj = getattr(instance, field)
             child = type(self.get_fields()[field])
-            serializer = child(sub_obj, data=values)
+            serializer = child(sub_obj, data=values, context=context)
             serializer.is_valid()
             serializer.save()
             objs.update({field: sub_obj})
@@ -280,10 +317,12 @@ class NestedModelSerializer(serializers.ModelSerializer):
 
     def bulk_create_many_related(self, field, instance, data):
         pks = []
+        request = self.context.get("request")
+        context={"request": request}
         sub_obj = getattr(instance, field)
         child = type(self.get_fields()[field].child)
         for values in data:
-            serializer = child(data=values)
+            serializer = child(data=values, context=context)
             serializer.is_valid()
             obj = serializer.save()
             pks.append(obj.pk)
@@ -293,11 +332,13 @@ class NestedModelSerializer(serializers.ModelSerializer):
     def bulk_update_many_related(self, field, instance, data):
         # {pk: {sub_field: values}}
         objs = []
+        request = self.context.get("request")
+        context={"request": request}
         model = self.get_fields()[field].child.Meta.model
         child = type(self.get_fields()[field].child)
         for pk, values in data.items():
             obj = model.objects.get(pk=pk)
-            serializer = child(obj, data=values)
+            serializer = child(obj, data=values, context=context)
             serializer.is_valid()
             obj = serializer.save()
             objs.append(obj)
@@ -308,16 +349,24 @@ class NestedModelSerializer(serializers.ModelSerializer):
         for field, value in data.items():
             for operator in value:
                 if operator == "add":
-                    self.bulk_create_many_related(field, instance, value[operator])
+                    self.bulk_create_many_related(
+                        field, 
+                        instance, 
+                        value[operator]
+                    )
                 elif operator == "remove":
                     obj = getattr(instance, field)
                     try:
                         obj.remove(*value[operator])
                     except Exception as e:
-                        message = self.constrain_error_prefix(field) + str(e)
-                        raise serializers.ValidationError(message)
+                        msg = self.constrain_error_prefix(field) + str(e)
+                        raise serializers.ValidationError(msg)
                 elif operator == "update":
-                    self.bulk_update_many_related(field, instance, value[operator])
+                    self.bulk_update_many_related(
+                        field, 
+                        instance, 
+                        value[operator]
+                    )
                 else:
                     message = (
                         f"{operator} is an invalid operator, "
@@ -328,8 +377,14 @@ class NestedModelSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         fields = {
-            "replaceable_nested_fields": {"simple_related": {}, "many_related": {}},
-            "writable_nested_fields": {"simple_related": {}, "many_related": {}}
+            "replaceable_nested_fields": {
+                "simple_related": {}, 
+                "many_related": {}
+            },
+            "writable_nested_fields": {
+                "simple_related": {}, 
+                "many_related": {}
+            }
         }
         data = {**validated_data}
         for field in data:
@@ -337,17 +392,21 @@ class NestedModelSerializer(serializers.ModelSerializer):
             if isinstance(field_type, ReplaceableField):
                 value = validated_data.pop(field)
                 if isinstance(field_type, serializers.Serializer):
-                    fields["replaceable_nested_fields"]["simple_related"].update({field: value})
+                    fields["replaceable_nested_fields"]\
+                        ["simple_related"].update({field: value})
                 elif isinstance(field_type, serializers.ListSerializer):
-                    fields["replaceable_nested_fields"]["many_related"].update({field: value})
+                    fields["replaceable_nested_fields"]\
+                        ["many_related"].update({field: value})
                 else:
                     pass
             elif isinstance(field_type, WritableField):
                 value = validated_data.pop(field)
                 if isinstance(field_type, serializers.Serializer):
-                    fields["writable_nested_fields"]["simple_related"].update({field: value})
+                    fields["writable_nested_fields"]\
+                        ["simple_related"].update({field: value})
                 elif isinstance(field_type, serializers.ListSerializer):
-                    fields["writable_nested_fields"]["many_related"].update({field: value})
+                    fields["writable_nested_fields"]\
+                        ["many_related"].update({field: value})
                 else:
                     pass
             else:

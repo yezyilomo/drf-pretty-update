@@ -123,6 +123,36 @@ class ViewTests(APITestCase):
             }
         )
 
+    def test_post_on_writable_nested_simple_related_field_with_many_related_field(self):
+        url = reverse("wstudent-list")
+        data = {
+            "name": "yezy",
+            "age": 33,
+            "course": {
+                "name": "Programming", 
+                "code": "CS50",
+                "books": [
+                    {"title": "Python Tricks", "author": "Dan Bader"}
+                ]
+            }
+        }
+        response = self.client.post(url, data, format="json")
+
+        self.assertEqual(
+            response.data,
+            {
+                'name': 'yezy', 
+                'age': 33, 
+                'course': {
+                    'name': 'Programming', 
+                    'code': 'CS50', 
+                    'books': [
+                        {"title": "Python Tricks", "author": "Dan Bader"}
+                    ]
+                }, 
+                'phone_numbers': []
+            }
+        )
 
     # **************** PUT Tests ********************* #
 
@@ -221,6 +251,37 @@ class ViewTests(APITestCase):
                 "books": [
                     {"title": "Power Of Data", "author": "James"},
                     {"title": "Primitive Data Types", "author": "S.Mobit"}
+                ]
+            }
+        )
+
+    def test_put_on_writable_nested_simple_related_field_with_many_related_field(self):
+        url = reverse("wstudent-detail", args=[self.student.id])
+        data = {
+            "name": "yezy",
+            "age": 33,
+            "course": {
+                "name": "Programming", 
+                "code": "CS50", 
+                "books": {
+                    "remove": [1]
+                }
+            }
+        }
+        response = self.client.put(url, data, format="json")
+        self.assertEqual(
+            response.data,
+            {
+                'name': 'yezy', 'age': 33, 
+                'course': {
+                    'name': 'Programming', 'code': 'CS50', 
+                    'books': [
+                        {'title': 'Basic Data Structures', 'author': 'S.Mobit'}
+                    ]
+                }, 
+                'phone_numbers': [
+                    {'number': '076711110', 'type': 'Office'}, 
+                    {'number': '073008880', 'type': 'Home'}
                 ]
             }
         )

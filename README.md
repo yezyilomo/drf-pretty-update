@@ -1,6 +1,6 @@
 # drf-pretty-update
+This is a collection of simple and flexible model serializer and fields for Django REST Framework which allows you to create/update your models with related nested data.
 
-Simple HTTP POST, PUT & PATCH request handler for Django REST Framework(DRF) nested data
 
 ## Getting Started
 drf-pretty-update has two components, Serializer and Fields. The Serializer which is `NestedModelSerializer` has `update` and `create` logics for nested fields, Fields are used to validate data before dispatching update or create.
@@ -9,7 +9,7 @@ There are two types of fields which are `ReplaceableNestedField` and `WritableNe
 
 `ReplaceableNestedField:` is used if you want to update nested field by using ids of existing data(basically associate and dessociate existing nested resources with the parent resource without actually mutating the nested resource).
 
-`WritableNestedField:` is used if you want to be able to actually mutate(create and update) nested resources.
+`WritableNestedField:` is used if you want to be able to actually mutate(create or update) nested resources.
 
 ### Using ReplaceableNestedField
 ```python
@@ -151,7 +151,7 @@ Request Body
         "country": "USA"
     },
     "amenities": [
-        {"name": "Water"},
+        {"name": "Watererr"},
         {"name": "Electricity"},
         {"name": "Swimming Pool"}
     ]
@@ -223,3 +223,7 @@ Response
     ]
 }
 ```
+
+## Running Tests
+
+`python setup.py test`
