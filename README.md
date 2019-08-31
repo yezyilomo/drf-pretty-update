@@ -20,7 +20,9 @@ There are two types of fields which are `ReplaceableNestedField` and `WritableNe
 ### Using ReplaceableNestedField
 ```python
 from app.models import Location, Amenity, Property
-from drf_pretty_update import NestedModelSerializer, ReplaceableNestedField, WritableNestedField
+from drf_pretty_update.serializers import NestedModelSerializer 
+from drf_pretty_update.fields import ReplaceableNestedField, WritableNestedField
+
 
 class LocationSerializer(NestedModelSerializer):
     class Meta:
@@ -120,7 +122,9 @@ Response
 ### Using WritableNestedField
 ```python
 from app.models import Location, Amenity, Property
-from drf_pretty_update import NestedModelSerializer, ReplaceableNestedField, WritableNestedField
+from drf_pretty_update.serializers import NestedModelSerializer 
+from drf_pretty_update.fields import ReplaceableNestedField, WritableNestedField
+
 
 class LocationSerializer(NestedModelSerializer):
     class Meta:

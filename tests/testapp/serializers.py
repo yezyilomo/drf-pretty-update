@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from tests.testapp.models import Book, Course, Student, Phone
-from drf_pretty_update.mixins import ReplaceableNestedField, NestedModelSerializer, WritableNestedField
+from drf_pretty_update.serializers import NestedModelSerializer
+from drf_pretty_update.fields import ReplaceableNestedField, WritableNestedField
 
 class PhoneSerializer(NestedModelSerializer):
     class Meta:
