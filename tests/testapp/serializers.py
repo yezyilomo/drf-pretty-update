@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from tests.testapp.models import Book, Course, Student, Phone
 from drf_pretty_update.serializers import NestedModelSerializer
-from drf_pretty_update.fields import ReplaceableNestedField, WritableNestedField
+from drf_pretty_update.fields import  NestedField
 
 class PhoneSerializer(NestedModelSerializer):
     class Meta:
@@ -16,7 +16,7 @@ class BookSerializer(NestedModelSerializer):
 
 
 class WritableCourseSerializer(NestedModelSerializer):
-    books = WritableNestedField(serializer=BookSerializer, many=True, required=False)
+    books = NestedField(BookSerializer, many=True, required=False)
         
     class Meta:
         model = Course
@@ -24,7 +24,7 @@ class WritableCourseSerializer(NestedModelSerializer):
 
 
 class ReplaceableCourseSerializer(NestedModelSerializer):
-    books = ReplaceableNestedField(serializer=BookSerializer, many=True, required=False)
+    books = NestedField(BookSerializer, pk=True, many=True, required=False)
         
     class Meta:
         model = Course
@@ -32,7 +32,7 @@ class ReplaceableCourseSerializer(NestedModelSerializer):
 
 
 class ReplaceableStudentSerializer(NestedModelSerializer):
-    course = ReplaceableNestedField(serializer=WritableCourseSerializer, many=False)
+    course = NestedField(WritableCourseSerializer, pk=True)
     phone_numbers = PhoneSerializer(many=True, read_only=True)
 
     class Meta:
@@ -41,7 +41,7 @@ class ReplaceableStudentSerializer(NestedModelSerializer):
 
 
 class WritableStudentSerializer(NestedModelSerializer):
-    course = WritableNestedField(serializer=WritableCourseSerializer, many=False)
+    course = NestedField(WritableCourseSerializer)
     phone_numbers = PhoneSerializer(many=True, read_only=True)
 
     class Meta:

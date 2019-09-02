@@ -8,18 +8,18 @@ class ViewTests(APITestCase):
         self.book1 = Book.objects.create(title="Advanced Data Structures", author="S.Mobit")
         self.book2 = Book.objects.create(title="Basic Data Structures", author="S.Mobit")
 
-        self.course = Course.objects.create(
+        self.course1 = Course.objects.create(
             name="Data Structures", code="CS210"
         )
-
         self.course2 = Course.objects.create(
             name="Programming", code="CS150"
         )
 
-        self.course.books.set([self.book1, self.book2])
+        self.course1.books.set([self.book1, self.book2])
+        self.course2.books.set([self.book1])
 
         self.student = Student.objects.create(
-            name="Yezy", age=24, course=self.course
+            name="Yezy", age=24, course=self.course1
         )
 
         self.phone1 = Phone.objects.create(number="076711110", type="Office", student=self.student)
@@ -33,7 +33,7 @@ class ViewTests(APITestCase):
 
     # **************** POST Tests ********************* #
 
-    def test_post_on_replaceable_nested_simple_related_field(self):
+    def test_post_on_pk_nested_simple_related_field(self):
         url = reverse("rstudent-list")
         data = {
             "name": "yezy",
@@ -41,7 +41,6 @@ class ViewTests(APITestCase):
             "course": 2
         }
         response = self.client.post(url, data, format="json")
-
         self.assertEqual(
             response.data,
             {
@@ -50,7 +49,9 @@ class ViewTests(APITestCase):
                 'course': {
                     'name': 'Programming', 
                     'code': 'CS150', 
-                    'books': []
+                    'books': [
+                        {"title": "Advanced Data Structures", "author": "S.Mobit"}
+                    ]
                 }, 
                 'phone_numbers': []
             }
@@ -79,12 +80,12 @@ class ViewTests(APITestCase):
             }
         )
 
-    def test_post_on_replaceable_with_nested_many_related_field(self):
+    def test_post_with_add_operation(self):
         url = reverse("rcourse-list")
         data = {
                 "name": "Data Structures",
                 "code": "CS310",
-                "books": [1,2]
+                "books": {"add":[1,2]}
         }
         response = self.client.post(url, data, format="json")
         self.assertEqual(
@@ -99,14 +100,14 @@ class ViewTests(APITestCase):
             }
         )
 
-    def test_post_on_writable_with_nested_many_related_field(self):
+    def test_post_with_create_operation(self):
         data = {
                 "name": "Data Structures",
                 "code": "CS310",
-                "books": [
+                "books": {"create": [
                     {"title": "Linear Math", "author": "Me"},
                     {"title": "Algebra Three", "author": "Me"}
-                ]
+                ]}
         }
         url = reverse("wcourse-list")
         response = self.client.post(url, data, format="json")
@@ -123,7 +124,7 @@ class ViewTests(APITestCase):
             }
         )
 
-    def test_post_on_writable_nested_simple_related_field_with_many_related_field(self):
+    def test_post_on_deep_nested_fields(self):
         url = reverse("wstudent-list")
         data = {
             "name": "yezy",
@@ -131,9 +132,9 @@ class ViewTests(APITestCase):
             "course": {
                 "name": "Programming", 
                 "code": "CS50",
-                "books": [
+                "books": {"create": [
                     {"title": "Python Tricks", "author": "Dan Bader"}
-                ]
+                ]}
             }
         }
         response = self.client.post(url, data, format="json")
@@ -156,7 +157,7 @@ class ViewTests(APITestCase):
 
     # **************** PUT Tests ********************* #
 
-    def test_put_on_replaceable_nested_simple_related_field(self):
+    def test_put_on_pk_nested_simple_related_field(self):
         url = reverse("rstudent-detail", args=[self.student.id])
         data = {
             "name": "yezy",
@@ -171,7 +172,7 @@ class ViewTests(APITestCase):
                 'course': {
                     'name': 'Programming', 'code': 'CS150', 
                     'books': [
-
+                        {"title": "Advanced Data Structures", "author": "S.Mobit"}
                     ]
                 }, 
                 'phone_numbers': [
@@ -208,14 +209,56 @@ class ViewTests(APITestCase):
             }
         )
 
-    def test_put_on_replaceable_with_nested_many_related_field(self):
-        url = reverse("rcourse-detail", args=[self.course.id])
+    def test_put_with_add_operation(self):
+        url = reverse("rcourse-detail", args=[self.course2.id])
+        data = {
+                "name": "Data Structures",
+                "code": "CS410",
+                "books": {
+                    "add": [2]
+                }
+        }
+        response = self.client.put(url, data, format="json")
+        self.assertEqual(
+            response.data,
+            {
+                "name": "Data Structures",
+                "code": "CS410",
+                "books": [
+                    {'title': 'Advanced Data Structures', 'author': 'S.Mobit'},
+                    {'title': 'Basic Data Structures', 'author': 'S.Mobit'}
+                ]
+            }
+        )
+
+    def test_put_with_remove_operation(self):
+        url = reverse("rcourse-detail", args=[self.course2.id])
+        data = {
+                "name": "Data Structures",
+                "code": "CS410",
+                "books": {
+                    "remove": [1]
+                }
+        }
+        response = self.client.put(url, data, format="json")
+        self.assertEqual(
+            response.data,
+            {
+                "name": "Data Structures",
+                "code": "CS410",
+                "books": []
+            }
+        )
+
+    def test_put_with_create_operation(self):
+        url = reverse("wcourse-detail", args=[self.course2.id])
         data = {
                 "name": "Data Structures",
                 "code": "CS310",
                 "books": {
-                    "remove": [1],
-                    "add": [1]
+                    "create": [
+                        {"title": "Primitive Data Types", "author": "S.Mobit"}
+                    ]
                 }
         }
         response = self.client.put(url, data, format="json")
@@ -226,20 +269,20 @@ class ViewTests(APITestCase):
                 "code": "CS310",
                 "books": [
                     {'title': 'Advanced Data Structures', 'author': 'S.Mobit'},
-                    {'title': 'Basic Data Structures', 'author': 'S.Mobit'}
+                    {"title": "Primitive Data Types", "author": "S.Mobit"}
                 ]
             }
         )
-        
-    def test_put_on_writable_with_nested_many_related_field(self):
-        url = reverse("wcourse-detail", args=[self.course.id])
+
+    def test_put_with_update_operation(self):
+        url = reverse("wcourse-detail", args=[self.course2.id])
         data = {
                 "name": "Data Structures",
                 "code": "CS310",
                 "books": {
-                    "remove": [2],
-                    "add": [{"title": "Primitive Data Types", "author": "S.Mobit"}],
-                    "update": {1:{"title": "Power Of Data", "author": "James"}}
+                    "update": {
+                        1: {"title": "React Programming", "author": "M.Json"}
+                    }
                 }
         }
         response = self.client.put(url, data, format="json")
@@ -249,13 +292,12 @@ class ViewTests(APITestCase):
                 "name": "Data Structures",
                 "code": "CS310",
                 "books": [
-                    {"title": "Power Of Data", "author": "James"},
-                    {"title": "Primitive Data Types", "author": "S.Mobit"}
+                    {"title": "React Programming", "author": "M.Json"}
                 ]
             }
         )
 
-    def test_put_on_writable_nested_simple_related_field_with_many_related_field(self):
+    def test_put_on_deep_nested_fields(self):
         url = reverse("wstudent-detail", args=[self.student.id])
         data = {
             "name": "yezy",
