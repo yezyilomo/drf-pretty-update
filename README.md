@@ -3,9 +3,8 @@ This is a collection of simple and flexible model serializer and fields for Djan
 
 
 ## Installing
-Since the package is not officially released, for now we'll use the command below to download it from the pypi test repository
 
-`pip install --index-url https://test.pypi.org/simple/ drf-pretty-update`
+`pip install drf-pretty-update`
 
 
 ## Getting Started
