@@ -1,5 +1,9 @@
-from rest_framework import serializers
+from rest_framework.serializers import (
+    Serializer, ListSerializer, 
+    ValidationError
+)
 
+from .operations import ADD, CREATE, REMOVE, UPDATE
 from .fields import _ReplaceableField, _WritableField
 
 
@@ -22,7 +26,7 @@ class NestedCreateMixin(object):
         for field, value in data.items():
             child = type(self.get_fields()[field])
             serializer = child(data=value, context=context)
-            serializer.is_valid()
+            m=serializer.is_valid()
             obj = serializer.save()
             objs.update({field: obj})
         return objs
@@ -40,85 +44,70 @@ class NestedCreateMixin(object):
             pks.append(obj.pk)
         return pks
 
-    def create_replaceable_many_related(self, instance, data):
-        # data format {field: [pks]}
-        objs = {}
-        for field, pks in data.items():
-            obj = getattr(instance, field)
-            model = self.get_fields()[field].child.Meta.model
-            obj_queryset = model.objects.filter(pk__in=pks)
-            obj.set(pks)
-            objs.update({field: obj_queryset})
-        return objs
-
-    def create_writable_many_related(self, instance, data):
-        # data format {field: [{sub_field: value}]}
+    def create_many_related(self, instance, data):
+        # data format {field: {
+        # ADD: [pks], 
+        # CREATE: [{sub_field: value}]
+        # }}
         fields_pks = {}
-        for field, value in data.items():
-            obj = getattr(instance, field)
-            pks = self.bulk_create_objs(field, value)
-            fields_pks.update({field: pks})
-            obj.set(pks)
+        for field, values in data.items():
+            for operation in values:
+                if operation == ADD:
+                    obj = getattr(instance, field)
+                    pks = values[operation]
+                    obj.set(pks)
+                    fields_pks.update({field: pks})
+                elif operation == CREATE:
+                    obj = getattr(instance, field)
+                    pks = self.bulk_create_objs(field, values[operation])
+                    obj.set(pks)
+                    fields_pks.update({field: pks})
         return fields_pks
 
     def create(self, validated_data):
         fields = {
-            "replaceable_nested_fields": {
-                "simple_related": {}, 
-                "many_related": {}
-            },
-            "writable_nested_fields": {
-                "simple_related": {}, 
-                "many_related": {}
-            }
+            "simple_related": { 
+                "replaceable": {},
+                "writable": {}
+            }, 
+            "many_related": {}
         }
         data = {**validated_data}
         for field in data:
             field_type = self.get_fields()[field]
-            if isinstance(field_type, _ReplaceableField):
+            if isinstance(field_type, Serializer):
+                if isinstance(field_type, _ReplaceableField):
+                    value = validated_data.pop(field)
+                    fields["simple_related"]["replaceable"] \
+                        .update({field: value})
+                elif isinstance(field_type, _WritableField):
+                    value = validated_data.pop(field)
+                    fields["simple_related"]["writable"]\
+                        .update({field: value})
+            elif (isinstance(field_type, ListSerializer) and 
+                    (isinstance(field_type, _WritableField) or 
+                    isinstance(field_type, _ReplaceableField))):
                 value = validated_data.pop(field)
-                if isinstance(field_type, serializers.Serializer):
-                    fields["replaceable_nested_fields"]\
-                        ["simple_related"].update({field: value})
-                elif isinstance(field_type, serializers.ListSerializer):
-                    fields["replaceable_nested_fields"]\
-                        ["many_related"].update({field: value})
-                else:
-                    pass
-            elif isinstance(field_type, _WritableField):
-                value = validated_data.pop(field)
-                if isinstance(field_type, serializers.Serializer):
-                    fields["writable_nested_fields"]\
-                        ["simple_related"].update({field: value})
-                elif isinstance(field_type, serializers.ListSerializer):
-                    fields["writable_nested_fields"]\
-                        ["many_related"].update({field: value})
-                else:
-                    pass
+                fields["many_related"].update({field: value})
             else:
                 pass
 
         simple_related = {
             **self.create_replaceable_simple_related(
-                fields["replaceable_nested_fields"]["simple_related"]
+                fields["simple_related"]["replaceable"]
             ),
             **self.create_writable_simple_related(
-                fields["writable_nested_fields"]["simple_related"]
+                fields["simple_related"]["writable"]
             )
         }
 
         obj = super().create({**validated_data, **simple_related})
         
-        self.create_replaceable_many_related(
+        self.create_many_related(
             obj, 
-            fields["replaceable_nested_fields"]["many_related"]
+            fields["many_related"]
         )
         
-        self.create_writable_many_related(
-            obj,
-            fields["writable_nested_fields"]["many_related"]
-        )
-
         return obj
 
 
@@ -131,7 +120,8 @@ class NestedUpdateMixin(object):
         # data format {field: pk}
         objs = {}
         for field, pk in data.items():
-            child_obj = self.get_fields()[field].Meta.model.objects.get(pk=pk)
+            model = self.get_fields()[field].Meta.model
+            child_obj = model.objects.get(pk=pk)
             setattr(instance, field, child_obj)
             instance.save()
             objs.update({field: instance})
@@ -150,31 +140,6 @@ class NestedUpdateMixin(object):
             serializer.save()
             objs.update({field: sub_obj})
         return objs
-
-    def update_replaceable_many_related(self, instance, data):
-        # data format {field: {add: [pk], remove: [pk], delete: [pk]}}
-        for field, value in data.items():
-            obj = getattr(instance, field)
-            for operator in value:
-                if operator == "add":
-                    try:
-                        obj.add(*value[operator])
-                    except Exception as e:
-                        message = self.constrain_error_prefix(field) + str(e)
-                        raise serializers.ValidationError(message)
-                elif operator == "remove":
-                    try:
-                        obj.remove(*value[operator])
-                    except Exception as e:
-                        message = self.constrain_error_prefix(field) + str(e)
-                        raise serializers.ValidationError(message)
-                else:
-                    message = (
-                        f"{operator} is an invalid operator, "
-                        "allowed operators are 'add' and 'remove'"
-                    )
-                    raise serializers.ValidationError(message)
-        return instance
 
     def bulk_create_many_related(self, field, instance, data):
         pks = []
@@ -205,89 +170,90 @@ class NestedUpdateMixin(object):
             objs.append(obj)
         return objs
 
-    def update_writable_many_related(self, instance, data):
-        # data format {field: {add: [{sub_field: value}], remove: [pk], update: {pk: {sub_field: value}} }}
-        for field, value in data.items():
-            for operator in value:
-                if operator == "add":
+    def update_many_related(self, instance, data):
+        # data format {field: {
+        # ADD: [{sub_field: value}], 
+        # CREATE: [{sub_field: value}], 
+        # REMOVE: [pk],
+        # UPDATE: {pk: {sub_field: value}} 
+        # }}
+        for field, values in data.items():
+            for operation in values:
+                if operation == ADD:
+                    obj = getattr(instance, field)
+                    pks = values[operation]
+                    try:
+                        obj.add(*pks)
+                    except Exception as e:
+                        msg = self.constrain_error_prefix(field) + str(e)
+                        raise ValidationError(msg)
+                elif operation == CREATE:
                     self.bulk_create_many_related(
                         field, 
                         instance, 
-                        value[operator]
+                        values[operation]
                     )
-                elif operator == "remove":
+                elif operation == REMOVE:
                     obj = getattr(instance, field)
+                    pks = values[operation]
                     try:
-                        obj.remove(*value[operator])
+                        obj.remove(*pks)
                     except Exception as e:
                         msg = self.constrain_error_prefix(field) + str(e)
-                        raise serializers.ValidationError(msg)
-                elif operator == "update":
+                        raise ValidationError(msg)
+                elif operation == UPDATE:
                     self.bulk_update_many_related(
                         field, 
                         instance, 
-                        value[operator]
+                        values[operation]
                     )
                 else:
                     message = (
-                        f"{operator} is an invalid operator, "
-                        "allowed operators are 'add' and 'remove'"
+                        f"{operation} is an invalid operation, "
                     )
-                    raise serializers.ValidationError(message)
+                    raise ValidationError(message)
         return instance
 
     def update(self, instance, validated_data):
         fields = {
-            "replaceable_nested_fields": {
-                "simple_related": {}, 
-                "many_related": {}
+            "simple_related": { 
+                "replaceable": {},
+                "writable": {}
             },
-            "writable_nested_fields": {
-                "simple_related": {}, 
-                "many_related": {}
-            }
+            "many_related": {}
         }
         data = {**validated_data}
         for field in data:
             field_type = self.get_fields()[field]
-            if isinstance(field_type, _ReplaceableField):
+            if isinstance(field_type, Serializer):
+                if isinstance(field_type, _ReplaceableField):
+                    value = validated_data.pop(field)
+                    fields["simple_related"]["replaceable"] \
+                        .update({field: value})
+                elif isinstance(field_type, _WritableField):
+                    value = validated_data.pop(field)
+                    fields["simple_related"]["writable"] \
+                        .update({field: value})
+            elif (isinstance(field_type, ListSerializer) and
+                    (isinstance(field_type, _WritableField) or 
+                    isinstance(field_type, _ReplaceableField))):
                 value = validated_data.pop(field)
-                if isinstance(field_type, serializers.Serializer):
-                    fields["replaceable_nested_fields"]\
-                        ["simple_related"].update({field: value})
-                elif isinstance(field_type, serializers.ListSerializer):
-                    fields["replaceable_nested_fields"]\
-                        ["many_related"].update({field: value})
-                else:
-                    pass
-            elif isinstance(field_type, _WritableField):
-                value = validated_data.pop(field)
-                if isinstance(field_type, serializers.Serializer):
-                    fields["writable_nested_fields"]\
-                        ["simple_related"].update({field: value})
-                elif isinstance(field_type, serializers.ListSerializer):
-                    fields["writable_nested_fields"]\
-                        ["many_related"].update({field: value})
-                else:
-                    pass
+                fields["many_related"].update({field: value})
             else:
                 pass
 
         self.update_replaceable_simple_related(
             instance,
-            fields["replaceable_nested_fields"]["simple_related"]
+            fields["simple_related"]["replaceable"]
         )
         self.update_writable_simple_related(
             instance,
-            fields["writable_nested_fields"]["simple_related"]
+            fields["simple_related"]["writable"]
         )
-        self.update_replaceable_many_related(
-            instance, 
-            fields["replaceable_nested_fields"]["many_related"]
-        )
-        self.update_writable_many_related(
+
+        self.update_many_related(
             instance,
-            fields["writable_nested_fields"]["many_related"]
+            fields["many_related"]
         )
 
         return super().update(instance, validated_data)
