@@ -20,9 +20,9 @@ def BaseNestedFieldSerializerFactory(*args,
                                      pk=False, 
                                      create_ops=[ADD, CREATE], 
                                      update_ops=[ADD, CREATE, REMOVE, UPDATE],
-                                     serializer=None, 
+                                     serializer_class=None, 
                                      **kwargs):
-    base_class = _ReplaceableField if pk else _WritableField
+    BaseClass = _ReplaceableField if pk else _WritableField
     
     if not set(create_ops).issubset(set(CREATE_SUPPORTED_OPERATIONS)):
         msg = (
@@ -38,7 +38,7 @@ def BaseNestedFieldSerializerFactory(*args,
         )
         raise InvalidOperation(msg)
 
-    class BaseNestedFieldListSerializer(ListSerializer, base_class):
+    class BaseNestedFieldListSerializer(ListSerializer, BaseClass):
         def validate_pk_list(self, pks):
             queryset = self.child.Meta.model.objects.all()
             validator = PrimaryKeyRelatedField(
@@ -49,7 +49,7 @@ def BaseNestedFieldSerializerFactory(*args,
     
         def validate_data_list(self, data):
             request = self.context.get('request')
-            parent_serializer = serializer(
+            parent_serializer = serializer_class(
                 data=data, 
                 many=True, 
                 context={"request": request}
@@ -93,7 +93,8 @@ def BaseNestedFieldSerializerFactory(*args,
                     validate[operation](values)
                 return data
             else:
-                op_list =list(map(lambda op: "'" + op + "'", create_ops))
+                wrap_quotes = lambda op: "'" + op + "'"
+                op_list =list(map(wrap_quotes, create_ops))
                 msg = (
                     "Expected data of form " +
                     "{" + ": [..], ".join(op_list) + ": [..]}"
@@ -119,7 +120,8 @@ def BaseNestedFieldSerializerFactory(*args,
                     validate[operation](values)
                 return data
             else:
-                op_list =list(map(lambda op: "'" + op + "'", update_ops))
+                wrap_quotes = lambda op: "'" + op + "'"
+                op_list =list(map(wrap_quotes, update_ops))
                 msg = (
                     "Expected data of form " +
                     "{" + ": [..], ".join(op_list) + ": [..]}"
@@ -135,7 +137,7 @@ def BaseNestedFieldSerializerFactory(*args,
             if request.method in ["POST"]:
                 return self.data_for_create(data)
 
-            parent_serializer = serializer(
+            parent_serializer = serializer_class(
                 data=data, 
                 many=True, 
                 context=context
@@ -145,12 +147,12 @@ def BaseNestedFieldSerializerFactory(*args,
 
         def __repr__(self):
             return (
-                "BaseNestedField(serializer=%s, many=True)" % 
-                (serializer.__name__, )
+                "BaseNestedField(%s, many=True)" % 
+                (serializer_class.__name__, )
             )
 
-    class BaseNestedFieldSerializer(serializer, base_class):
-        class Meta(serializer.Meta):
+    class BaseNestedFieldSerializer(serializer_class, BaseClass):
+        class Meta(serializer_class.Meta):
             list_serializer_class = BaseNestedFieldListSerializer
 
         def validate_pk_based_nested(self, data):
@@ -165,7 +167,7 @@ def BaseNestedFieldSerializerFactory(*args,
         def validate_data_based_nested(self, data):
             request = self.context.get("request")
             context={"request": request}
-            parent_serializer = serializer(data=data, context=context)
+            parent_serializer = serializer_class(data=data, context=context)
             parent_serializer.is_valid(raise_exception=True)
             return parent_serializer.validated_data
 
@@ -176,8 +178,8 @@ def BaseNestedFieldSerializerFactory(*args,
 
         def __repr__(self):
             return (
-                "BaseNestedField(serializer=%s, many=False)" % 
-                (serializer.__name__, )
+                "BaseNestedField(%s, many=False)" % 
+                (serializer_class.__name__, )
             )
 
     kwargs.update({"read_only": False, "write_only": False})
@@ -192,13 +194,13 @@ def BaseNestedFieldSerializerFactory(*args,
 
 def NestedFieldWraper(*args, **kwargs):
     factory = BaseNestedFieldSerializerFactory(*args, **kwargs)
-    serializer = kwargs["serializer"]
+    serializer_class = kwargs["serializer_class"]
 
     class NestedListSerializer(factory["list_serializer_class"]):
         def __repr__(self):
             return (
-                "NestedField(serializer=%s, many=False)" % 
-                (serializer.__name__, )
+                "NestedField(%s, many=False)" % 
+                (serializer_class.__name__, )
             )
 
 
@@ -208,8 +210,8 @@ def NestedFieldWraper(*args, **kwargs):
 
         def __repr__(self):
             return (
-                "NestedField(serializer=%s, many=False)" % 
-                (serializer.__name__, )
+                "NestedField(%s, many=False)" % 
+                (serializer_class.__name__, )
             )
 
             
@@ -218,6 +220,10 @@ def NestedFieldWraper(*args, **kwargs):
         **factory["kwargs"]
     )
 
-def NestedField(serializer=None, *args, **kwargs):
-    return NestedFieldWraper(serializer=serializer, *args, **kwargs)
+def NestedField(serializer_class, *args, **kwargs):
+    return NestedFieldWraper(
+        *args, 
+        serializer_class=serializer_class, 
+        **kwargs
+    )
 
