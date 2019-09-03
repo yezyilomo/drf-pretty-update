@@ -33,7 +33,7 @@ class ViewTests(APITestCase):
 
     # **************** POST Tests ********************* #
 
-    def test_post_on_pk_nested_simple_related_field(self):
+    def test_post_on_pk_nested_foreignkey_related_field(self):
         url = reverse("rstudent-list")
         data = {
             "name": "yezy",
@@ -57,7 +57,7 @@ class ViewTests(APITestCase):
             }
         )
         
-    def test_post_on_writable_nested_simple_related_field(self):
+    def test_post_on_writable_nested_foreignkey_related_field(self):
         url = reverse("wstudent-list")
         data = {
             "name": "yezy",
@@ -157,7 +157,7 @@ class ViewTests(APITestCase):
 
     # **************** PUT Tests ********************* #
 
-    def test_put_on_pk_nested_simple_related_field(self):
+    def test_put_on_pk_nested_foreignkey_related_field(self):
         url = reverse("rstudent-detail", args=[self.student.id])
         data = {
             "name": "yezy",
@@ -182,7 +182,7 @@ class ViewTests(APITestCase):
             }
         )
 
-    def test_put_on_writable_nested_simple_related_field(self):
+    def test_put_on_writable_nested_foreignkey_related_field(self):
         url = reverse("wstudent-detail", args=[self.student.id])
         data = {
             "name": "yezy",
