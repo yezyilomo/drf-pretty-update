@@ -24,7 +24,7 @@ class WritableCourseSerializer(NestedModelSerializer):
 
 
 class ReplaceableCourseSerializer(NestedModelSerializer):
-    books = NestedField(BookSerializer, pk=True, many=True, required=False)
+    books = NestedField(BookSerializer, accept_pk=True, many=True, required=False)
         
     class Meta:
         model = Course
@@ -32,7 +32,7 @@ class ReplaceableCourseSerializer(NestedModelSerializer):
 
 
 class ReplaceableStudentSerializer(NestedModelSerializer):
-    course = NestedField(WritableCourseSerializer, pk=True)
+    course = NestedField(WritableCourseSerializer, accept_pk=True)
     phone_numbers = PhoneSerializer(many=True, read_only=True)
 
     class Meta:

@@ -133,8 +133,8 @@ Response
 <br>
 
 
-### Using NestedField with `pk=True` kwarg.
-`pk=True` is used if you want to update nested field by using id of existing data(basically associate and dessociate existing nested resources with the parent resource without actually mutating the nested resource). This applies to ForeignKey relation only.
+### Using NestedField with `accept_pk=True` kwarg.
+`accept_pk=True` is used if you want to update nested field by using pk/id of existing data(basically associate and dessociate existing nested resources with the parent resource without actually mutating the nested resource). This applies to ForeignKey relation only.
 
 ```python
 from app.models import Location, Amenity, Property
@@ -149,7 +149,7 @@ class LocationSerializer(NestedModelSerializer):
 
 
 class PropertySerializer(NestedModelSerializer):
-    location = NestedField(ocationSerializer, pk=True)
+    location = NestedField(ocationSerializer, accept_pk=True)
     class Meta:
         model = Property
         fields = (
