@@ -17,12 +17,12 @@ class _WritableField(object):
     pass
 
 def BaseNestedFieldSerializerFactory(*args, 
-                                     pk=False, 
+                                     accept_pk=False, 
                                      create_ops=[ADD, CREATE], 
                                      update_ops=[ADD, CREATE, REMOVE, UPDATE],
                                      serializer_class=None, 
                                      **kwargs):
-    BaseClass = _ReplaceableField if pk else _WritableField
+    BaseClass = _ReplaceableField if accept_pk else _WritableField
     
     if not set(create_ops).issubset(set(CREATE_SUPPORTED_OPERATIONS)):
         msg = (
@@ -172,7 +172,7 @@ def BaseNestedFieldSerializerFactory(*args,
             return parent_serializer.validated_data
 
         def to_internal_value(self, data):
-            if pk:
+            if accept_pk:
                 return self.validate_pk_based_nested(data)
             return self.validate_data_based_nested(data)
 
