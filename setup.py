@@ -9,7 +9,7 @@ REQUIRES_PYTHON = '>=2.7'
 
 setup(
     name = 'drf-pretty-update',
-    version = '0.1.3',
+    version = '0.1.4',
     description = DESCRIPTION,
     long_description = readme,
     long_description_content_type = 'text/markdown',
