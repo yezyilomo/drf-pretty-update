@@ -55,7 +55,7 @@ def BaseNestedFieldSerializerFactory(*args,
             rel = getattr(model, self.source).rel
 
             if isinstance(rel, ManyToOneRel):
-                # Foreign key related field
+                # ManyToOne Relation
                 field_name = getattr(model, self.source).field.name
                 # remove field_name to validated fields
                 contain_field = lambda a: a != field_name
@@ -69,17 +69,14 @@ def BaseNestedFieldSerializerFactory(*args,
                 )
                 parent_serializer.is_valid(raise_exception=True)
                 serializer_class.Meta.fields = original_fields
-                return {
-                    "foreignkey_name": field_name, 
-                    "data": parent_serializer.validated_data
-                }
-
-            parent_serializer = serializer_class(
-                data=data, 
-                many=True, 
-                context={"request": request}
-            )
-            parent_serializer.is_valid(raise_exception=True)
+            else:
+                # ManyToMany Relation
+                parent_serializer = serializer_class(
+                    data=data, 
+                    many=True, 
+                    context={"request": request}
+                )
+                parent_serializer.is_valid(raise_exception=True)
             return parent_serializer.validated_data
     
         def validate_add_list(self, data):
