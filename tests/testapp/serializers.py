@@ -6,7 +6,7 @@ from drf_pretty_update.fields import  NestedField
 class PhoneSerializer(NestedModelSerializer):
     class Meta:
         model = Phone
-        fields = ['number', 'type']
+        fields = ['number', 'type', 'student']
 
 
 class BookSerializer(NestedModelSerializer):
@@ -42,7 +42,7 @@ class ReplaceableStudentSerializer(NestedModelSerializer):
 
 class WritableStudentSerializer(NestedModelSerializer):
     course = NestedField(WritableCourseSerializer)
-    phone_numbers = PhoneSerializer(many=True, read_only=True)
+    phone_numbers = NestedField(PhoneSerializer, many=True, required=False)
 
     class Meta:
         model = Student

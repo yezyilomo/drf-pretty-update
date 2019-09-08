@@ -1,7 +1,9 @@
+import copy
 from rest_framework.serializers import (
     Serializer, ListSerializer, 
     ValidationError, PrimaryKeyRelatedField
 )
+from django.db.models.fields.related import ManyToOneRel
 
 from .exceptions import InvalidOperation
 from .operations import ADD, CREATE, REMOVE, UPDATE
@@ -49,12 +51,32 @@ def BaseNestedFieldSerializerFactory(*args,
     
         def validate_data_list(self, data):
             request = self.context.get('request')
-            parent_serializer = serializer_class(
-                data=data, 
-                many=True, 
-                context={"request": request}
-            )
-            parent_serializer.is_valid(raise_exception=True)
+            model = self.parent.Meta.model
+            rel = getattr(model, self.source).rel
+
+            if isinstance(rel, ManyToOneRel):
+                # ManyToOne Relation
+                field_name = getattr(model, self.source).field.name
+                # remove field_name to validated fields
+                contain_field = lambda a: a != field_name
+                fields = filter(contain_field, serializer_class.Meta.fields)
+                original_fields = copy.copy(serializer_class.Meta.fields)
+                serializer_class.Meta.fields = list(fields)
+                parent_serializer = serializer_class(
+                    data=data, 
+                    many=True, 
+                    context={"request": request}
+                )
+                parent_serializer.is_valid(raise_exception=True)
+                serializer_class.Meta.fields = original_fields
+            else:
+                # ManyToMany Relation
+                parent_serializer = serializer_class(
+                    data=data, 
+                    many=True, 
+                    context={"request": request}
+                )
+                parent_serializer.is_valid(raise_exception=True)
             return parent_serializer.validated_data
     
         def validate_add_list(self, data):

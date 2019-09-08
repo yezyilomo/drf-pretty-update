@@ -62,7 +62,7 @@ class ViewTests(APITestCase):
         data = {
             "name": "yezy",
             "age": 33,
-            "course": {"name": "Programming", "code": "CS50"}
+            "course": {"name": "Programming", "code": "CS50"},
         }
         response = self.client.post(url, data, format="json")
 
@@ -155,6 +155,36 @@ class ViewTests(APITestCase):
             }
         )
 
+    def test_post_on_many_2_one_relation(self):
+        url = reverse("wstudent-list")
+        data = {
+            "name": "yezy",
+            "age": 33,
+            "course": {"name": "Programming", "code": "CS50"},
+            "phone_numbers": {
+                'create': [
+                    {'number': '076750000', 'type': 'office'}
+                ]
+            }
+        }
+        response = self.client.post(url, data, format="json")
+
+        self.assertEqual(
+            response.data,
+            {
+                'name': 'yezy', 
+                'age': 33, 
+                'course': {
+                    'name': 'Programming', 
+                    'code': 'CS50', 
+                    'books': []
+                }, 
+                'phone_numbers': [
+                    {'number': '076750000', 'type': 'office', 'student': 2}
+                ]
+            }
+        )
+
     # **************** PUT Tests ********************* #
 
     def test_put_on_pk_nested_foreignkey_related_field(self):
@@ -176,8 +206,8 @@ class ViewTests(APITestCase):
                     ]
                 }, 
                 'phone_numbers': [
-                    {'number': '076711110', 'type': 'Office'}, 
-                    {'number': '073008880', 'type': 'Home'} 
+                    {'number': '076711110', 'type': 'Office', 'student': 1}, 
+                    {'number': '073008880', 'type': 'Home', 'student': 1} 
                 ]
             }
         )
@@ -202,8 +232,8 @@ class ViewTests(APITestCase):
                     ]
                 }, 
                 'phone_numbers': [
-                    {'number': '076711110', 'type': 'Office'}, 
-                    {'number': '073008880', 'type': 'Home'}
+                    {'number': '076711110', 'type': 'Office', 'student': 1}, 
+                    {'number': '073008880', 'type': 'Home', 'student': 1}
                     
                 ]
             }
@@ -322,8 +352,45 @@ class ViewTests(APITestCase):
                     ]
                 }, 
                 'phone_numbers': [
-                    {'number': '076711110', 'type': 'Office'}, 
-                    {'number': '073008880', 'type': 'Home'}
+                    {'number': '076711110', 'type': 'Office', 'student': 1}, 
+                    {'number': '073008880', 'type': 'Home', 'student': 1}
+                ]
+            }
+        )
+
+    def test_put_on_many_2_one_relation(self):
+        url = reverse("wstudent-detail", args=[self.student.id])
+        data = {
+            "name": "yezy",
+            "age": 33,
+            "course": {"name": "Programming", "code": "CS50"},
+            "phone_numbers": {
+                'update': {
+                    1: {'number': '073008811', 'type': 'office'}
+                },
+                'create': [
+                    {'number': '076750000', 'type': 'office'}
+                ]
+            }
+        }
+        response = self.client.put(url, data, format="json")
+
+        self.assertEqual(
+            response.data,
+            {
+                'name': 'yezy', 'age': 33, 
+                'course': {
+                    'name': 'Programming', 'code': 'CS50', 
+                    'books': [
+                        {'title': 'Advanced Data Structures', 'author': 'S.Mobit'},
+                        {'title': 'Basic Data Structures', 'author': 'S.Mobit'}
+                    ]
+                }, 
+                'phone_numbers': [
+                    {'number': '073008811', 'type': 'office', 'student': 1}, 
+                    {'number': '073008880', 'type': 'Home', 'student': 1},
+                    {'number': '076750000', 'type': 'office', 'student': 1}
+                    
                 ]
             }
         )

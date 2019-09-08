@@ -4,6 +4,7 @@ from rest_framework.serializers import (
     Serializer, ListSerializer, 
     ValidationError
 )
+from django.db.models.fields.related import ManyToOneRel, ManyToManyRel
 
 from .operations import ADD, CREATE, REMOVE, UPDATE
 from .fields import _ReplaceableField, _WritableField
@@ -47,7 +48,32 @@ class NestedCreateMixin(object):
             pks.append(obj.pk)
         return pks
 
-    def create_many_related(self, instance, data):
+    def create_many_to_one_related(self, instance, data):
+        # data format {field: {
+        # foreignkey_name: name,
+        # data: {
+        # ADD: [pks], 
+        # CREATE: [{sub_field: value}]
+        # }}
+        field_pks = {}
+        for field, values in data.items():
+            model = self.Meta.model
+            foreignkey = getattr(model, field).field.name
+            for operation in values:
+                if operation == ADD:
+                    pks = values[operation]
+                    model = self.get_fields()[field].child.Meta.model
+                    qs = model.objects.filter(pk__in=pks)
+                    qs.update(**{foreignkey: instance.pk})
+                    field_pks.update({field: pks})
+                elif operation == CREATE:
+                    for v in values[operation]:
+                        v.update({foreignkey: instance.pk})
+                    pks = self.bulk_create_objs(field, values[operation])
+                    field_pks.update({field: pks})
+        return field_pks
+
+    def create_many_to_many_related(self, instance, data):
         # data format {field: {
         # ADD: [pks], 
         # CREATE: [{sub_field: value}]
@@ -73,7 +99,10 @@ class NestedCreateMixin(object):
                 "replaceable": {},
                 "writable": {}
             }, 
-            "many_related": {}
+            "many_to": {
+                "many_related": {},
+                "one_related": {}
+            }
         }
 
         # Make a partal copy of validated_data so that we can
@@ -93,8 +122,16 @@ class NestedCreateMixin(object):
             elif (isinstance(field_serializer, ListSerializer) and 
                     (isinstance(field_serializer, _WritableField) or 
                     isinstance(field_serializer, _ReplaceableField))):
-                value = validated_data.pop(field)
-                fields["many_related"].update({field: value})
+
+                model = self.Meta.model
+                rel = getattr(model, field).rel
+    
+                if isinstance(rel, ManyToOneRel):
+                    value = validated_data.pop(field)
+                    fields["many_to"]["one_related"].update({field: value})
+                elif isinstance(rel, ManyToManyRel):
+                    value = validated_data.pop(field)
+                    fields["many_to"]["many_related"].update({field: value})
             else:
                 pass
 
@@ -109,9 +146,14 @@ class NestedCreateMixin(object):
 
         instance = super().create({**validated_data, **foreignkey_related})
         
-        self.create_many_related(
+        self.create_many_to_many_related(
             instance, 
-            fields["many_related"]
+            fields["many_to"]["many_related"]
+        )
+
+        self.create_many_to_one_related(
+            instance, 
+            fields["many_to"]["one_related"]
         )
         
         return instance
@@ -152,7 +194,7 @@ class NestedUpdateMixin(object):
             objs.update({field: nested_obj})
         return objs
 
-    def bulk_create_many_related(self, field, nested_obj, data):
+    def bulk_create_many_to_many_related(self, field, nested_obj, data):
         request = self.context.get("request")
         context={"request": request}
         # Get serializer class for nested field
@@ -166,7 +208,20 @@ class NestedUpdateMixin(object):
         nested_obj.add(*pks)
         return pks
 
-    def bulk_update_many_related(self, field, nested_obj, data):
+    def bulk_create_many_to_one_related(self, field, nested_obj, data):
+        request = self.context.get("request")
+        context={"request": request}
+        # Get serializer class for nested field
+        SerializerClass = type(self.get_fields()[field].child)
+        pks = []
+        for values in data:
+            serializer = SerializerClass(data=values, context=context)
+            serializer.is_valid()
+            obj = serializer.save()
+            pks.append(obj.pk)
+        return pks
+
+    def bulk_update_many_to_many_related(self, field, nested_obj, data):
         # {pk: {sub_field: values}}
         objs = []
         request = self.context.get("request")
@@ -181,7 +236,70 @@ class NestedUpdateMixin(object):
             objs.append(obj)
         return objs
 
-    def update_many_related(self, instance, data):
+    def bulk_update_many_to_one_related(self, field, instance, data):
+        # {pk: {sub_field: values}}
+        objs = []
+        request = self.context.get("request")
+        context={"request": request}
+        # Get serializer class for nested field
+        SerializerClass = type(self.get_fields()[field].child)
+        model = self.Meta.model
+        foreignkey = getattr(model, field).field.name
+        nested_obj = getattr(instance, field)
+        for pk, values in data.items():
+            obj = nested_obj.get(pk=pk)
+            values.update({foreignkey: instance.pk})
+            serializer = SerializerClass(obj, data=values, context=context)
+            serializer.is_valid()
+            obj = serializer.save()
+            objs.append(obj)
+        return objs
+
+    def update_many_to_one_related(self, instance, data):
+        # data format {field: {
+        # foreignkey_name: name:
+        # data: {
+        # ADD: [{sub_field: value}], 
+        # CREATE: [{sub_field: value}], 
+        # REMOVE: [pk],
+        # UPDATE: {pk: {sub_field: value}} 
+        # }}}
+
+        for field, values in data.items():
+            nested_obj = getattr(instance, field)
+            model = self.Meta.model
+            foreignkey = getattr(model, field).field.name
+            for operation in values:
+                if operation == ADD:
+                    pks = values[operation]
+                    model = self.get_fields()[field].child.Meta.model
+                    qs = model.objects.filter(pk__in=pks)
+                    qs.update(**{foreignkey: instance.pk})
+                elif operation == CREATE:
+                    for v in values[operation]:
+                        v.update({foreignkey: instance.pk})
+                    self.bulk_create_many_to_one_related(
+                        field, 
+                        nested_obj, 
+                        values[operation]
+                    )
+                elif operation == REMOVE:
+                    qs = nested_obj.all()
+                    qs.filter(pk__in=values[operation]).delete()
+                elif operation == UPDATE:
+                    self.bulk_update_many_to_one_related(
+                        field, 
+                        instance,
+                        values[operation]
+                    )
+                else:
+                    message = (
+                        f"{operation} is an invalid operation, "
+                    )
+                    raise ValidationError(message)
+        return instance
+
+    def update_many_to_many_related(self, instance, data):
         # data format {field: {
         # ADD: [{sub_field: value}], 
         # CREATE: [{sub_field: value}], 
@@ -199,7 +317,7 @@ class NestedUpdateMixin(object):
                         msg = self.constrain_error_prefix(field) + str(e)
                         raise ValidationError(msg)
                 elif operation == CREATE:
-                    self.bulk_create_many_related(
+                    self.bulk_create_many_to_many_related(
                         field, 
                         nested_obj, 
                         values[operation]
@@ -212,7 +330,7 @@ class NestedUpdateMixin(object):
                         msg = self.constrain_error_prefix(field) + str(e)
                         raise ValidationError(msg)
                 elif operation == UPDATE:
-                    self.bulk_update_many_related(
+                    self.bulk_update_many_to_many_related(
                         field, 
                         nested_obj, 
                         values[operation]
@@ -230,7 +348,10 @@ class NestedUpdateMixin(object):
                 "replaceable": {},
                 "writable": {}
             },
-            "many_related": {}
+            "many_to": {
+                "many_related": {},
+                "one_related": {}
+            }
         }
 
         # Make a partal copy of validated_data so that we can
@@ -250,8 +371,15 @@ class NestedUpdateMixin(object):
             elif (isinstance(field_serializer, ListSerializer) and
                     (isinstance(field_serializer, _WritableField) or 
                     isinstance(field_serializer, _ReplaceableField))):
-                value = validated_data.pop(field)
-                fields["many_related"].update({field: value})
+                model = self.Meta.model
+                rel = getattr(model, field).rel
+    
+                if isinstance(rel, ManyToOneRel):
+                    value = validated_data.pop(field)
+                    fields["many_to"]["one_related"].update({field: value})
+                elif isinstance(rel, ManyToManyRel):
+                    value = validated_data.pop(field)
+                    fields["many_to"]["many_related"].update({field: value})
             else:
                 pass
 
@@ -264,9 +392,14 @@ class NestedUpdateMixin(object):
             fields["foreignkey_related"]["writable"]
         )
 
-        self.update_many_related(
+        self.update_many_to_many_related(
             instance,
-            fields["many_related"]
+            fields["many_to"]["many_related"]
+        )
+
+        self.update_many_to_one_related(
+            instance,
+            fields["many_to"]["one_related"]
         )
 
         return super().update(instance, validated_data)
